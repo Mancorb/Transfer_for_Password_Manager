@@ -125,6 +125,7 @@ def transfer(data,pswd):
 root = Tk()
 root.title("Transfer tool")
 master_pass = StringVar()
+text_1=Text(root,text="Please enter the previous password to start the procedure").pack()
 pass_entry = Entry(root, textvariable=master_pass).pack()
 db_search_button = Button (root, text="location", command=lambda: openFile(master_pass)).pack()
 
