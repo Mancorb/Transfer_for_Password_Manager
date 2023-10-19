@@ -258,7 +258,13 @@ def startTransfer(passInput,loc_1,loc_2,flag):
     transfer((str(loc_1),str(loc_2)),key,password)
 
 
-
+def process(passInput,loc_1,loc_2,flag):
+    try:
+        startTransfer(passInput,loc_1,loc_2,flag)
+        messagebox.showinfo(title="Complete",message="Process completed!")
+    except Exception as e:
+        messagebox.showerror(title="Universal Error",message="Error Detected:"+str(e))
+    
 
 
     
@@ -305,6 +311,6 @@ flag = Checkbutton(root,text="Im using 1.2.X",variable=version_2_flag,offvalue=F
 Button(root, height = 2,
                  width = 20, 
                  text ="Transfer",
-                 command=lambda: startTransfer(Password,location_1,location_2,version_2_flag)).pack()
+                 command=lambda: process(Password,location_1,location_2,version_2_flag)).pack()
 
 mainloop()
