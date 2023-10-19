@@ -12,6 +12,11 @@ import base64
 
 
 def encryption(password):
+    """Universal encryption methods for version 1.3 returns the encrypted universal key
+
+    Args:
+        password (string): password to ecrypt
+    """
     def encryptMain(word):
         """Encrypts a word with matrix multiplication
 
@@ -88,6 +93,14 @@ def encryption(password):
 
 
 def obtain_connection(loc):
+    """Return connection to database
+
+    Args:
+        loc (string): location of the database
+
+    Returns:
+        obj: if boolean then connection failed
+    """
     try:
         con = sqlite3.connect(loc)
         cur = con.cursor()
@@ -114,6 +127,14 @@ def _geDB_Route(text, location):
 
 
 def obtData (loc):
+    """Return all the rows from a database
+
+    Args:
+        loc (string): Location of the database 
+
+    Returns:
+        List: all the collected rows in a single object
+    """
     try:
         con = sqlite3.connect(loc)
         cur = con.cursor()
@@ -158,11 +179,28 @@ def getID(cur):
 
 
 def encrypt(key,data):
+    """Returns MD5 ecryption of the text
+
+    Args:
+        key (string): key used to encryp the text
+        data (string): data to ecrypt
+
+    Returns:
+        string: text encrypted
+    """
     f = Fernet(key)
     return f.encrypt(data.encode()).decode("utf-8")
 
 
 def writter(row,con,cur,key):
+    """Write the collected info into the new database
+
+    Args:
+        row (tuple): data of the specific row from previous database
+        con (sql obj): connection to database object
+        cur (sql obj): cursor related to the sql connection
+        key (string): key to encrypt the password with
+    """
     if key:
         pswrd = encrypt(key,row[2])
     else:
@@ -204,6 +242,15 @@ def keyCreator(pswd):
 
 
 def verifyPassword(password,connection):
+    """Return True if the passwords are the same
+
+    Args:
+        password (string): password input from user
+        connection (sql obj): sql connection object
+
+    Returns:
+        boolean: determine if passwords are the same
+    """
     cursor = connection[1]
     cursor.execute("SELECT * FROM auth")
     rows = cursor.fetchall()
@@ -215,6 +262,13 @@ def verifyPassword(password,connection):
 
 
 def transfer(data,key,pswd):
+    """Obtaines the filtered info from previous method and writes it to the new database
+
+    Args:
+        data (tuple): _description_
+        key (string): key to ecrypt the passwords
+        pswd (string): password used to encrypt and save in new database
+    """
     rows = obtData(data[0])
 
     con = sqlite3.connect(data[1])
@@ -230,20 +284,24 @@ def transfer(data,key,pswd):
 
 
 def startTransfer(passInput,loc_1,loc_2,flag):
+    #Extract the values from the tkinter variables
     VerFlag  = flag.get()
     password = passInput.get()
     loc_2 = loc_2.get()
     loc_1 = loc_1.get()
-    #check if the upser didn't obmit any inputs
+    #Check if the user didn't obmit any inputs
     if password == "" or loc_1 =="" or loc_2=="":
         messagebox.showwarning(title="Missing Input",message="Plase fillout tall the inputs")
         return
-    #save password in the new database
+    
     connection, cursor = obtain_connection(loc_2)
     if not connection:
         messagebox.showwarning(title="Missing Database",message="Database to trasfer to not found...")
         return
     
+    #Save password in the new database but verify if it shares the same password the user wrote
+    #The passwrod can't be extracted from the DB since the DB only has an encrypted version of the password
+
     if verifyPassword(password,obtain_connection(loc_1)):
         cursor.execute(f"INSERT INTO 'auth' ('ID') VALUES('{encryption(password)}')")
         connection.commit()
@@ -254,11 +312,23 @@ def startTransfer(passInput,loc_1,loc_2,flag):
     if len(VerFlag)>0 and int(VerFlag)==0:
         key = keyCreator(password)
     
-
+    #start the process
     transfer((str(loc_1),str(loc_2)),key,password)
 
 
 def process(passInput,loc_1,loc_2,flag):
+    """Method to call the other methods, if something fails it will raise a flag
+
+    Args:
+        passInput (string): password input value
+        loc_1 (string): location of the first DB
+        loc_2 (string): location of the second DB
+        flag (string): value of 0,1 or  None to indicate if the transfer is from 1.2 to 1.3
+    """
+    
+
+
+
     try:
         startTransfer(passInput,loc_1,loc_2,flag)
         messagebox.showinfo(title="Complete",message="Process completed!")
