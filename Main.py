@@ -92,23 +92,234 @@ def encryption(password):
     return md5(bytes(encryptMain(password), 'utf-8')).hexdigest()
 
 
-def obtain_connection(loc):
-    """Return connection to database
+def process(passInput,loc_1,loc_2,flag):
+    """Method to call the other methods, if something fails it will raise a flag
 
     Args:
-        loc (string): location of the database
-
-    Returns:
-        obj: if boolean then connection failed
+        passInput (string): password input value
+        loc_1 (string): location of the first DB
+        loc_2 (string): location of the second DB
+        flag (string): value of 0,1 or  None to indicate if the transfer is from 1.2 to 1.3
     """
-    try:
-        con = sqlite3.connect(loc)
+
+    def startTransfer(passInput,loc_1,loc_2,flag):
+        #Extract the values from the tkinter variables
+        VerFlag  = flag.get()
+        password = passInput.get()
+        loc_2 = loc_2.get()
+        loc_1 = loc_1.get()
+        #Check if the user didn't obmit any inputs
+        if password == "" or loc_1 =="" or loc_2=="":
+            messagebox.showwarning(title="Missing Input",message="Plase fillout tall the inputs")
+            return False
+
+        connection, cursor = obtain_connection(loc_2)
+        if not connection:
+            messagebox.showwarning(title="Missing Database",message="Database to trasfer to not found...")
+            return False
+
+        #Save password in the new database but verify if it shares the same password the user wrote
+        #The passwrod can't be extracted from the DB since the DB only has an encrypted version of the password
+
+        if verifyPassword(password,obtain_connection(loc_1)):
+            cursor.execute(f"INSERT INTO 'auth' ('ID') VALUES('{encryption(password)}')")
+            connection.commit()
+            connection.close()
+
+        else: return False
+
+        key = None
+
+        if len(VerFlag)>0 and int(VerFlag)==0:
+            key = keyCreator(password)
+
+        #start the process
+        if transfer((str(loc_1),str(loc_2)),key,password):
+            return True
+    
+    
+    def transfer(data,key,pswd):
+        """Obtaines the filtered info from previous method and writes it to the new database
+
+        Args:
+            data (tuple): _description_
+            key (string): key to ecrypt the passwords
+            pswd (string): password used to encrypt and save in new database
+        """
+        rows = obtData(data[0])
+
+        con = sqlite3.connect(data[1])
         cur = con.cursor()
-        return con,cur
-    except Exception as e:
-        messagebox.showerror(e)
+
+        if verifyPassword(pswd,cur):
+
+            for row in rows: 
+                writter(row,con,cur,key)
+        else:
+            messagebox.showerror(title="Wrong password",message="The password you typed is no the same as the one saved in the database.")
+            con.close()
+            return False
+        con.close()
+
+
+    def verifyPassword(password,connection):
+        """Return True if the passwords are the same
+
+        Args:
+            password (string): password input from user
+            connection (sql obj): sql connection object
+
+        Returns:
+            boolean: determine if passwords are the same
+        """
+        cursor = connection[1]
+        cursor.execute("SELECT * FROM auth")
+        rows = cursor.fetchall()
+        connection[0].close()
+
+        if rows[0] == encrypt(keyCreator(password),password):
+            return True
         return False
 
+
+    def obtain_connection(loc):
+        """Return connection to database
+
+        Args:
+            loc (string): location of the database
+
+        Returns:
+            obj: if boolean then connection failed
+        """
+        try:
+            con = sqlite3.connect(loc)
+            cur = con.cursor()
+            return con,cur
+        except Exception as e:
+            messagebox.showerror(e)
+            return False
+
+
+    def obtData (loc):
+        """Return all the rows from a database
+
+        Args:
+            loc (string): Location of the database 
+
+        Returns:
+            List: all the collected rows in a single object
+        """
+        try:
+            con = sqlite3.connect(loc)
+            cur = con.cursor()
+            cur.execute("SELECT site,user,pass FROM list")
+            rows = cur.fetchall()
+            con.close()
+
+            return rows
+        except Exception as e:
+            con.close()
+            print(e)
+
+
+    def getID(cur):
+        """Creates a new ID for the registry
+
+        Args:
+            cur (SQL cursor object): Database cursor
+
+        Returns:
+            int: registry ID
+        """
+        cur.execute("SELECT id FROM List ORDER BY id;")
+        id=cur.fetchall()
+        try:
+            id=str(id)
+            temp=''
+            specialChars ="[](),'"
+            for specialChar in specialChars:
+                id=id.replace(specialChar,'')
+            if id=='':
+                return 1
+
+            for i in id:
+                if i !=' ':
+                    temp=temp+i
+                if i==' ':
+                    temp=''
+            return int(temp)+1
+        except Exception as e:
+            print(e)
+
+
+    def encrypt(key,data):
+        """Returns MD5 ecryption of the text
+
+        Args:
+            key (string): key used to encryp the text
+            data (string): data to ecrypt
+
+        Returns:
+            string: text encrypted
+        """
+        f = Fernet(key)
+        return f.encrypt(data.encode()).decode("utf-8")
+
+
+    def writter(row,con,cur,key):
+        """Write the collected info into the new database
+
+        Args:
+            row (tuple): data of the specific row from previous database
+            con (sql obj): connection to database object
+            cur (sql obj): cursor related to the sql connection
+            key (string): key to encrypt the password with
+        """
+        if key:
+            pswrd = encrypt(key,row[2])
+        else:
+            pswrd = row[2]
+        cur.execute(f"INSERT INTO list Values('{row[0]}','{row[1]}','{pswrd}',{getID(cur)})")
+        con.commit()
+
+
+    def getHashVal(text):
+        """Returns hash value of a string
+
+        Args:
+            text (String): text to convert to hash
+
+        Returns:
+            String: string of hash object decrypted from byte form
+        """
+        return md5(bytes(text, 'utf-8')).hexdigest()
+
+
+    def keyCreator(pswd):
+        """Creates encription and decription key based on user input
+
+        Args:
+            pswd (String): user input of the password
+        """
+        password = pswd.encode()  # Convert to type bytes
+        salt = getHashVal(pswd)
+        salt = salt.encode()
+
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        return base64.urlsafe_b64encode(kdf.derive(password))
+
+    try:
+        if startTransfer(passInput,loc_1,loc_2,flag):
+            messagebox.showinfo(title="Complete",message="Process completed!")
+    except Exception as e:
+        messagebox.showerror(title="Universal Error",message="Error Detected:"+str(e))
+    
 
 def _geDB_Route(text, location):
     """Obtain the location of the databases
@@ -124,219 +335,6 @@ def _geDB_Route(text, location):
                                                 ("All Files", "*.*"))
                                         )
     )
-
-
-def obtData (loc):
-    """Return all the rows from a database
-
-    Args:
-        loc (string): Location of the database 
-
-    Returns:
-        List: all the collected rows in a single object
-    """
-    try:
-        con = sqlite3.connect(loc)
-        cur = con.cursor()
-        cur.execute("SELECT site,user,pass FROM list")
-        rows = cur.fetchall()
-        con.close()
-
-        return rows
-    except Exception as e:
-        con.close()
-        print(e)
-
-
-def getID(cur):
-    """Creates a new ID for the registry
-
-    Args:
-        cur (SQL cursor object): Database cursor
-
-    Returns:
-        int: registry ID
-    """
-    cur.execute("SELECT id FROM List ORDER BY id;")
-    id=cur.fetchall()
-    try:
-        id=str(id)
-        temp=''
-        specialChars ="[](),'"
-        for specialChar in specialChars:
-            id=id.replace(specialChar,'')
-        if id=='':
-            return 1
-
-        for i in id:
-            if i !=' ':
-                temp=temp+i
-            if i==' ':
-                temp=''
-        return int(temp)+1
-    except Exception as e:
-        print(e)
-
-
-def encrypt(key,data):
-    """Returns MD5 ecryption of the text
-
-    Args:
-        key (string): key used to encryp the text
-        data (string): data to ecrypt
-
-    Returns:
-        string: text encrypted
-    """
-    f = Fernet(key)
-    return f.encrypt(data.encode()).decode("utf-8")
-
-
-def writter(row,con,cur,key):
-    """Write the collected info into the new database
-
-    Args:
-        row (tuple): data of the specific row from previous database
-        con (sql obj): connection to database object
-        cur (sql obj): cursor related to the sql connection
-        key (string): key to encrypt the password with
-    """
-    if key:
-        pswrd = encrypt(key,row[2])
-    else:
-        pswrd = row[2]
-    cur.execute(f"INSERT INTO list Values('{row[0]}','{row[1]}','{pswrd}',{getID(cur)})")
-    con.commit()
-
-
-def getHashVal(text):
-    """Returns hash value of a string
-
-    Args:
-        text (String): text to convert to hash
-
-    Returns:
-        String: string of hash object decrypted from byte form
-    """
-    return md5(bytes(text, 'utf-8')).hexdigest()
-
-
-def keyCreator(pswd):
-    """Creates encription and decription key based on user input
-
-    Args:
-        pswd (String): user input of the password
-    """
-    password = pswd.encode()  # Convert to type bytes
-    salt = getHashVal(pswd)
-    salt = salt.encode()
-
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=100000,
-        backend=default_backend()
-    )
-    return base64.urlsafe_b64encode(kdf.derive(password))
-
-
-def verifyPassword(password,connection):
-    """Return True if the passwords are the same
-
-    Args:
-        password (string): password input from user
-        connection (sql obj): sql connection object
-
-    Returns:
-        boolean: determine if passwords are the same
-    """
-    cursor = connection[1]
-    cursor.execute("SELECT * FROM auth")
-    rows = cursor.fetchall()
-    connection[0].close()
-    
-    if rows[0] == encrypt(keyCreator(password),password):
-        return True
-    return False
-
-
-def transfer(data,key,pswd):
-    """Obtaines the filtered info from previous method and writes it to the new database
-
-    Args:
-        data (tuple): _description_
-        key (string): key to ecrypt the passwords
-        pswd (string): password used to encrypt and save in new database
-    """
-    rows = obtData(data[0])
-
-    con = sqlite3.connect(data[1])
-    cur = con.cursor()
-
-    if verifyPassword(pswd,cur):
-
-        for row in rows: 
-            writter(row,con,cur,key)
-    else:
-        messagebox.showerror(title="Wrong password",message="The password you typed is no the same as the one saved in the database.")
-    con.close()
-
-
-def startTransfer(passInput,loc_1,loc_2,flag):
-    #Extract the values from the tkinter variables
-    VerFlag  = flag.get()
-    password = passInput.get()
-    loc_2 = loc_2.get()
-    loc_1 = loc_1.get()
-    #Check if the user didn't obmit any inputs
-    if password == "" or loc_1 =="" or loc_2=="":
-        messagebox.showwarning(title="Missing Input",message="Plase fillout tall the inputs")
-        return
-    
-    connection, cursor = obtain_connection(loc_2)
-    if not connection:
-        messagebox.showwarning(title="Missing Database",message="Database to trasfer to not found...")
-        return
-    
-    #Save password in the new database but verify if it shares the same password the user wrote
-    #The passwrod can't be extracted from the DB since the DB only has an encrypted version of the password
-
-    if verifyPassword(password,obtain_connection(loc_1)):
-        cursor.execute(f"INSERT INTO 'auth' ('ID') VALUES('{encryption(password)}')")
-        connection.commit()
-        connection.close()
-
-    key = None
-
-    if len(VerFlag)>0 and int(VerFlag)==0:
-        key = keyCreator(password)
-    
-    #start the process
-    transfer((str(loc_1),str(loc_2)),key,password)
-
-
-def process(passInput,loc_1,loc_2,flag):
-    """Method to call the other methods, if something fails it will raise a flag
-
-    Args:
-        passInput (string): password input value
-        loc_1 (string): location of the first DB
-        loc_2 (string): location of the second DB
-        flag (string): value of 0,1 or  None to indicate if the transfer is from 1.2 to 1.3
-    """
-    
-
-
-
-    try:
-        startTransfer(passInput,loc_1,loc_2,flag)
-        messagebox.showinfo(title="Complete",message="Process completed!")
-    except Exception as e:
-        messagebox.showerror(title="Universal Error",message="Error Detected:"+str(e))
-    
-
-
     
 
 
