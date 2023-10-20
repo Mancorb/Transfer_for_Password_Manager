@@ -6,9 +6,12 @@ from cryptography.hazmat.primitives import hashes
 from tkinter import filedialog,messagebox
 from cryptography.fernet import Fernet
 from hashlib import md5
+from tkinter.ttk import Progressbar
 import numpy as np
 import sqlite3
 import base64
+from time import sleep
+
 
 
 def encryption(password):
@@ -141,11 +144,11 @@ def process(passInput,loc_1,loc_2,flag):
             key = keyCreator(password)
 
         #start the process
-        if transfer((str(loc_1),str(loc_2)),key,password):
+        if transfer((str(loc_1),str(loc_2)),key):
             return True
     
     
-    def transfer(data,key,pswd):
+    def transfer(data,key):
         """Obtaines the filtered info from previous method and writes it to the new database
 
         Args:
@@ -158,9 +161,13 @@ def process(passInput,loc_1,loc_2,flag):
         con = sqlite3.connect(data[1])
         cur = con.cursor()
 
-
+        counter = 0
+        bar.configure(maximum=len(rows)-1)
+        
         for row in rows: 
             writter(row,con,cur,key)
+            showProgress(len(rows)-1,counter)
+            counter += 1
 
         con.close()
 
@@ -323,15 +330,17 @@ def process(passInput,loc_1,loc_2,flag):
     except Exception as e:
         messagebox.showerror(title="Universal Error",message="Error Detected:"+str(e))
     
+    
+    
 
-def _geDB_Route(text, location):
+def _geDB_Route(text, location, start= "/."):
     """Obtain the location of the databases
 
     Args:
         text (string): varaible for a differnt title
         location (StringVar): tkinter variable to store the location
     """
-    location.set (filedialog.askopenfilename(initialdir="/.",
+    location.set (filedialog.askopenfilename(initialdir=start,
                                            title =f"Location to {text}",
                                            filetypes=(
                                                 ("Database","*.db"),
@@ -339,8 +348,12 @@ def _geDB_Route(text, location):
                                         )
     )
     
-
-
+def showProgress(total,current):
+    value = (current * 100) / total
+    progress_txt.set(f"Progress: {value}%")
+    bar['value']=current
+    
+    
 root = Tk()
 
 
@@ -348,8 +361,9 @@ location_1 = StringVar()
 location_2 = StringVar()
 version_2_flag = StringVar()
 Password = StringVar()
+progress_txt = StringVar()
 
-root.geometry("400x300")
+root.geometry("400x350")
 root.title(" Testing ")
  
   
@@ -373,7 +387,7 @@ Label(text = "Search for the location of the database to transfer to").pack()
 Button(root, height = 2,
                  width = 20, 
                  text ="Search",
-                 command=lambda: _geDB_Route("transfer data to",location_2)).pack()
+                 command=lambda: _geDB_Route("transfer data to",location_2,location_1.get())).pack()
 
 Label(root,textvariable =location_2).pack()
 
@@ -384,4 +398,8 @@ Button(root, height = 2,
                  text ="Transfer",
                  command=lambda: process(Password,location_1,location_2,version_2_flag)).pack()
 
+Label (root,textvariable =progress_txt).pack()
+
+bar = Progressbar(root,orient=HORIZONTAL,length=300)
+bar.pack()
 mainloop()
