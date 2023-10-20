@@ -104,7 +104,11 @@ def process(passInput,loc_1,loc_2,flag):
 
     def startTransfer(passInput,loc_1,loc_2,flag):
         #Extract the values from the tkinter variables
-        VerFlag  = flag.get()
+        if len(flag.get())<1:
+            VerFlag = 1
+        else:
+            VerFlag = int(flag.get())
+
         password = passInput.get()
         loc_2 = loc_2.get()
         loc_1 = loc_1.get()
@@ -121,7 +125,7 @@ def process(passInput,loc_1,loc_2,flag):
         #Save password in the new database but verify if it shares the same password the user wrote
         #The passwrod can't be extracted from the DB since the DB only has an encrypted version of the password
 
-        if verifyPassword(password,obtain_connection(loc_1)):
+        if verifyPassword(password,obtain_connection(loc_1) and VerFlag == 0):
             cursor.execute(f"INSERT INTO 'auth' ('ID') VALUES('{encryption(password)}')")
             connection.commit()
             connection.close()
