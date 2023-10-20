@@ -125,16 +125,19 @@ def process(passInput,loc_1,loc_2,flag):
         #Save password in the new database but verify if it shares the same password the user wrote
         #The passwrod can't be extracted from the DB since the DB only has an encrypted version of the password
 
-        if verifyPassword(password,obtain_connection(loc_1) and VerFlag == 0):
+        if VerFlag == 1 and verifyPassword(password,obtain_connection(loc_1)):
             cursor.execute(f"INSERT INTO 'auth' ('ID') VALUES('{encryption(password)}')")
             connection.commit()
             connection.close()
 
-        else: return False
+        if VerFlag == 0:
+            cursor.execute(f"INSERT INTO 'auth' ('ID') VALUES('{encryption(password)}')")
+            connection.commit()
+            connection.close()
 
         key = None
 
-        if len(VerFlag)>0 and int(VerFlag)==0:
+        if VerFlag==0:
             key = keyCreator(password)
 
         #start the process
@@ -155,14 +158,10 @@ def process(passInput,loc_1,loc_2,flag):
         con = sqlite3.connect(data[1])
         cur = con.cursor()
 
-        if verifyPassword(pswd,cur):
 
-            for row in rows: 
-                writter(row,con,cur,key)
-        else:
-            messagebox.showerror(title="Wrong password",message="The password you typed is no the same as the one saved in the database.")
-            con.close()
-            return False
+        for row in rows: 
+            writter(row,con,cur,key)
+
         con.close()
 
 
